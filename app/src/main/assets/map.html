@@ -1,0 +1,996 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NyayaAI Emergency Map</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+    
+    <!-- Leaflet MarkerCluster CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+    
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #1a1c23;
+            color: #ffffff;
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+            background: #1e222d;
+        }
+
+        /* Fallback Grid Pattern if Tiles Fail */
+        .map-fallback-grid {
+            background-size: 40px 40px;
+            background-image: 
+                linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+        }
+
+        /* Tile Failure Banner Overlay */
+        #tileErrorBanner {
+            position: absolute;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1200;
+            background: rgba(239, 68, 68, 0.92);
+            color: #ffffff;
+            padding: 8px 18px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            box-shadow: 0 6px 16px rgba(0,0,0,0.4);
+            display: none;
+            pointer-events: auto;
+            text-align: center;
+        }
+
+        /* Floating Controls Container */
+        .ui-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            pointer-events: none;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .interactive {
+            pointer-events: auto;
+        }
+
+        /* Top Search Bar */
+        .search-box {
+            display: flex;
+            align-items: center;
+            background: rgba(26, 28, 35, 0.94);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 12px;
+            padding: 6px 12px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+        }
+
+        .search-box input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: #ffffff;
+            font-size: 14px;
+            padding: 8px 4px;
+        }
+
+        .search-box input::placeholder {
+            color: #8e95a5;
+        }
+
+        .search-box button {
+            background: #3b82f6;
+            border: none;
+            color: white;
+            border-radius: 8px;
+            padding: 8px 14px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .search-box button:active {
+            background: #2563eb;
+        }
+
+        /* Category Filter Scroll */
+        .categories-scroll {
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            padding-bottom: 4px;
+            scrollbar-width: none;
+        }
+
+        .categories-scroll::-webkit-scrollbar {
+            display: none;
+        }
+
+        .chip {
+            background: rgba(26, 28, 35, 0.88);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #d1d5db;
+            border-radius: 20px;
+            padding: 6px 14px;
+            font-size: 12px;
+            font-weight: 500;
+            white-space: nowrap;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+            transition: all 0.2s;
+        }
+
+        .chip.active {
+            background: #3b82f6;
+            color: #ffffff;
+            border-color: #60a5fa;
+            font-weight: 600;
+        }
+
+        /* Radius Selector */
+        .radius-selector {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(26, 28, 35, 0.90);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 20px;
+            padding: 4px 12px;
+            width: fit-content;
+        }
+
+        .radius-selector label {
+            font-size: 11px;
+            color: #9ca3af;
+            font-weight: 500;
+        }
+
+        .radius-selector select {
+            background: transparent;
+            border: none;
+            color: #3b82f6;
+            font-size: 12px;
+            font-weight: 600;
+            outline: none;
+        }
+
+        /* FAB Action Stack */
+        .fab-stack {
+            position: absolute;
+            right: 14px;
+            top: 145px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            pointer-events: auto;
+        }
+
+        .fab-btn {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: rgba(26, 28, 35, 0.92);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+            cursor: pointer;
+        }
+
+        .fab-btn:active {
+            transform: scale(0.95);
+            background: #2563eb;
+        }
+
+        /* Bottom Detail Panel */
+        .detail-card {
+            position: absolute;
+            bottom: 16px;
+            left: 12px;
+            right: 12px;
+            z-index: 1000;
+            background: rgba(26, 28, 35, 0.95);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 16px;
+            padding: 14px 16px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            display: none;
+            pointer-events: auto;
+            animation: slideUp 0.25s ease-out;
+        }
+
+        @keyframes slideUp {
+            from { transform: translateY(100%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .detail-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+
+        .detail-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #ffffff;
+        }
+
+        .detail-category {
+            font-size: 12px;
+            color: #9ca3af;
+        }
+
+        .detail-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 12px;
+        }
+
+        .btn-nav {
+            flex: 1;
+            background: #10b981;
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 13px;
+            cursor: pointer;
+            text-align: center;
+        }
+
+        .btn-close {
+            background: rgba(255, 255, 255, 0.1);
+            color: #d1d5db;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+        /* Toast Message */
+        .toast {
+            position: absolute;
+            top: 130px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 2000;
+            background: rgba(239, 68, 68, 0.9);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            display: none;
+            pointer-events: none;
+        }
+
+        /* Map Loader Overlay */
+        #mapLoader {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            z-index: 1500;
+            background: #1a1c23;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            transition: opacity 0.4s ease;
+        }
+
+        .spinner {
+            width: 38px;
+            height: 38px;
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-top: 4px solid #3b82f6;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Custom User Marker Pulsing */
+        .user-gps-marker {
+            width: 20px;
+            height: 20px;
+            background: #3b82f6;
+            border: 3px solid #ffffff;
+            border-radius: 50%;
+            box-shadow: 0 0 15px rgba(59, 130, 246, 0.8);
+            position: relative;
+        }
+
+        .user-gps-marker::after {
+            content: '';
+            position: absolute;
+            top: -10px; left: -10px;
+            width: 34px; height: 34px;
+            border-radius: 50%;
+            background: rgba(59, 130, 246, 0.35);
+            animation: pulseGps 1.8s infinite ease-out;
+        }
+
+        @keyframes pulseGps {
+            0% { transform: scale(0.5); opacity: 1; }
+            100% { transform: scale(1.8); opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Map Canvas Container (Guaranteed to exist before scripts run) -->
+    <div id="map" class="map-fallback-grid"></div>
+
+    <!-- Map Loader Screen -->
+    <div id="mapLoader">
+        <div class="spinner"></div>
+        <div id="loaderText" style="font-size: 13px; color: #9ca3af; font-weight: 500;">Loading OpenStreetMap Engine...</div>
+    </div>
+
+    <!-- Tile Error Banner -->
+    <div id="tileErrorBanner" onclick="retryTileLoading()">⚠️ Unable to load map tiles. Tap to retry.</div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="toast"></div>
+
+    <!-- UI Overlay Stack -->
+    <div class="ui-container">
+        <!-- Search Input Box -->
+        <div class="search-box interactive">
+            <input type="text" id="searchInput" placeholder="Search police, hospital, court or location..." onkeypress="if(event.key==='Enter') performSearch();" />
+            <button onclick="performSearch()">Search</button>
+        </div>
+
+        <!-- Filter Chips Row -->
+        <div class="categories-scroll interactive" id="categoryChips">
+            <div class="chip active" onclick="setFilterCategory('All', this)">🌐 All</div>
+            <div class="chip" onclick="setFilterCategory('Police', this)">🚨 Police</div>
+            <div class="chip" onclick="setFilterCategory('Hospital', this)">🏥 Hospital</div>
+            <div class="chip" onclick="setFilterCategory('Fire Station', this)">🚒 Fire Station</div>
+            <div class="chip" onclick="setFilterCategory('Ambulance', this)">🚑 Ambulance</div>
+            <div class="chip" onclick="setFilterCategory('Blood Bank', this)">🩸 Blood Bank</div>
+            <div class="chip" onclick="setFilterCategory('Legal Aid', this)">⚖️ Legal Aid</div>
+            <div class="chip" onclick="setFilterCategory('Court', this)">🏛️ Court</div>
+            <div class="chip" onclick="setFilterCategory('Restaurant', this)">🍽️ Restaurant</div>
+            <div class="chip" onclick="setFilterCategory('Hotel', this)">🏨 Hotel</div>
+            <div class="chip" onclick="setFilterCategory('Bus Stop', this)">🚌 Bus Stop</div>
+            <div class="chip" onclick="setFilterCategory('Railway', this)">🚆 Railway</div>
+            <div class="chip" onclick="setFilterCategory('Airport', this)">✈️ Airport</div>
+            <div class="chip" onclick="setFilterCategory('Bank', this)">🏦 Bank</div>
+            <div class="chip" onclick="setFilterCategory('ATM', this)">🏧 ATM</div>
+            <div class="chip" onclick="setFilterCategory('Petrol Pump', this)">⛽ Petrol Pump</div>
+        </div>
+
+        <!-- Radius Selector Row -->
+        <div class="radius-selector interactive">
+            <label for="radiusSelect">Scan Radius:</label>
+            <select id="radiusSelect" onchange="onRadiusChanged(this.value)">
+                <option value="2000">2 km</option>
+                <option value="5000" selected>5 km</option>
+                <option value="10000">10 km</option>
+                <option value="20000">20 km</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Right Control FABs -->
+    <div class="fab-stack">
+        <div class="fab-btn" title="Recenter GPS" onclick="recenterGps()">📍</div>
+        <div class="fab-btn" title="Toggle Map View Layer" id="layerToggleBtn" onclick="toggleMapLayer()">🗺️</div>
+        <div class="fab-btn" title="Refresh Emergency Services" onclick="refreshCurrentLocationServices()">🔄</div>
+    </div>
+
+    <!-- Bottom Selected Detail Card -->
+    <div class="detail-card" id="detailCard">
+        <div class="detail-header">
+            <div>
+                <div class="detail-title" id="placeTitle">Police Station</div>
+                <div class="detail-category" id="placeSubtitle">0.8 km away • Active</div>
+            </div>
+        </div>
+        <div class="detail-actions">
+            <button class="btn-nav" id="btnNav" onclick="navigateSelectedPlace()">🧭 Navigate via Google Maps</button>
+            <button class="btn-close" onclick="closeDetailCard()">Close</button>
+        </div>
+    </div>
+
+    <!-- Primary & Backup Leaflet Scripts -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+    <script>
+        if (typeof L === 'undefined') {
+            document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"><\/script>');
+        }
+    </script>
+    <script>
+        if (typeof L === 'undefined') {
+            document.write('<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"><\/script>');
+        }
+    </script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+
+    <!-- Refactored Script Engine -->
+    <script>
+        // Global JS Error Guard
+        window.onerror = function(msg, url, line) {
+            console.error("[NyayaMapJSGuard] " + msg + " at line " + line);
+            return false;
+        };
+
+        // Core Application State
+        var userLat = 28.6139;
+        var userLng = 77.2090;
+        var map = null;
+        var tileLayer = null;
+        var userMarker = null;
+        var markersGroup = null;
+        var complaintGroup = null;
+        var routePolyline = null;
+        
+        var currentFilter = 'All';
+        var searchRadius = 5000;
+        var isSatellite = false;
+        var currentSelectedPlace = null;
+        var currentTileProviderIndex = 0;
+        var tileErrorCount = 0;
+        var leafletCheckAttempts = 0;
+
+        // Tile Servers (Auto Failover System)
+        var tileProviders = [
+            { name: "OpenStreetMap Standard", url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png", maxZoom: 19 },
+            { name: "CartoDB Voyager", url: "https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png", maxZoom: 19 },
+            { name: "OpenStreetMap Direct", url: "https://a.tile.openstreetmap.org/{z}/{x}/{y}.png", maxZoom: 19 },
+            { name: "OpenStreetMap DE", url: "https://tile.openstreetmap.de/{z}/{x}/{y}.png", maxZoom: 18 }
+        ];
+        var satelliteUrl = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+
+        // Overpass Mapping
+        var categoryMetadata = {
+            "Police": { icon: "🚨", query: '["amenity"="police"]' },
+            "Hospital": { icon: "🏥", query: '["amenity"="hospital"]' },
+            "Fire Station": { icon: "🚒", query: '["amenity"="fire_station"]' },
+            "Ambulance": { icon: "🚑", query: '["emergency"="ambulance_station"]' },
+            "Blood Bank": { icon: "🩸", query: '["healthcare"="blood_bank"]' },
+            "Legal Aid": { icon: "⚖️", query: '["office"="lawyer"]' },
+            "Court": { icon: "🏛️", query: '["amenity"="courthouse"]' },
+            "Restaurant": { icon: "🍽️", query: '["amenity"="restaurant"]' },
+            "Hotel": { icon: "🏨", query: '["tourism"="hotel"]' },
+            "Bus Stop": { icon: "🚌", query: '["highway"="bus_stop"]' },
+            "Railway": { icon: "🚆", query: '["railway"="station"]' },
+            "Airport": { icon: "✈️", query: '["aeroway"="aerodrome"]' },
+            "Bank": { icon: "🏦", query: '["amenity"="bank"]' },
+            "ATM": { icon: "🏧", query: '["amenity"="atm"]' },
+            "Petrol Pump": { icon: "⛽", query: '["amenity"="fuel"]' }
+        };
+
+        // DOM Ready Initialization Check
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', checkLeafletAndInit);
+        } else {
+            checkLeafletAndInit();
+        }
+
+        function checkLeafletAndInit() {
+            leafletCheckAttempts++;
+            if (typeof L !== 'undefined') {
+                console.log("[NyayaMap] Leaflet Loaded");
+                initMap();
+            } else {
+                if (leafletCheckAttempts > 25) {
+                    console.warn("[NyayaMap] Leaflet library load timeout. Displaying fallback.");
+                    hideLoader();
+                    showTileErrorBanner("Unable to load map library. Check network connection.");
+                } else {
+                    setTimeout(checkLeafletAndInit, 120);
+                }
+            }
+        }
+
+        // Single Initialization Call
+        function initMap() {
+            if (map) return;
+
+            var mapElem = document.getElementById('map');
+            if (!mapElem) {
+                console.error("[NyayaMap] Element #map not found!");
+                return;
+            }
+
+            try {
+                map = L.map('map', {
+                    zoomControl: false,
+                    attributionControl: false,
+                    bounceAtZoomLimits: false
+                }).setView([userLat, userLng], 14);
+
+                console.log("[NyayaMap] Map Created");
+
+                attachTileLayer(0);
+
+                // Cluster Group handling
+                if (typeof L.markerClusterGroup === 'function') {
+                    markersGroup = L.markerClusterGroup({ disableClusteringAtZoom: 16 });
+                    complaintGroup = L.markerClusterGroup();
+                    map.addLayer(markersGroup);
+                    map.addLayer(complaintGroup);
+                } else {
+                    markersGroup = L.layerGroup().addTo(map);
+                    complaintGroup = L.layerGroup().addTo(map);
+                }
+
+                drawUserMarker();
+                fetchOverpassServices(userLat, userLng, currentFilter, searchRadius, true);
+
+                // Invalidate size at multiple intervals to guarantee full container layout calculation
+                setTimeout(function() {
+                    if (map) map.invalidateSize(true);
+                }, 300);
+
+                setTimeout(function() {
+                    if (map) map.invalidateSize(true);
+                }, 1000);
+
+                setTimeout(hideLoader, 600);
+
+            } catch (err) {
+                console.error("[NyayaMapInitException] Failed to construct Leaflet:", err);
+                hideLoader();
+                showTileErrorBanner("Unable to initialize map renderer.");
+            }
+        }
+
+        // Tile layer attachment with automatic error recovery
+        function attachTileLayer(index) {
+            if (!map) return;
+            if (tileLayer) map.removeLayer(tileLayer);
+
+            hideTileErrorBanner();
+            var provider = tileProviders[index % tileProviders.length];
+            currentTileProviderIndex = index % tileProviders.length;
+
+            tileLayer = L.tileLayer(provider.url, {
+                maxZoom: provider.maxZoom,
+                subdomains: ['a', 'b', 'c']
+            });
+
+            tileLayer.on('tileload', function() {
+                console.log("[NyayaMap] Tile Loaded");
+                tileErrorCount = 0;
+                hideLoader();
+                hideTileErrorBanner();
+            });
+
+            tileLayer.on('tileerror', function() {
+                tileErrorCount++;
+                if (tileErrorCount >= 4) {
+                    switchTileProviderOnFailure();
+                }
+            });
+
+            tileLayer.addTo(map);
+        }
+
+        function switchTileProviderOnFailure() {
+            tileErrorCount = 0;
+            var next = currentTileProviderIndex + 1;
+            if (next < tileProviders.length) {
+                showToast("Switching to backup map tile provider...", false);
+                attachTileLayer(next);
+            } else {
+                showTileErrorBanner("Unable to load map tiles. Please check internet connection.");
+            }
+        }
+
+        function retryTileLoading() {
+            hideTileErrorBanner();
+            showLoader("Retrying tile download...");
+            attachTileLayer(0);
+        }
+
+        function showTileErrorBanner(msg) {
+            var banner = document.getElementById('tileErrorBanner');
+            if (banner) {
+                if (msg) banner.innerText = "⚠️ " + msg;
+                banner.style.display = 'block';
+            }
+        }
+
+        function hideTileErrorBanner() {
+            var banner = document.getElementById('tileErrorBanner');
+            if (banner) banner.style.display = 'none';
+        }
+
+        function drawUserMarker() {
+            if (!map) return;
+            var userIcon = L.divIcon({
+                className: 'custom-user-icon',
+                html: '<div class="user-gps-marker"></div>',
+                iconSize: [20, 20],
+                iconAnchor: [10, 10]
+            });
+
+            if (userMarker) {
+                userMarker.setLatLng([userLat, userLng]);
+            } else {
+                userMarker = L.marker([userLat, userLng], { icon: userIcon }).addTo(map);
+            }
+        }
+
+        // Android Bridge - Location Update
+        function updateUserLocation(lat, lng) {
+            var parsedLat = parseFloat(lat);
+            var parsedLng = parseFloat(lng);
+            if (isNaN(parsedLat) || isNaN(parsedLng)) return;
+
+            userLat = parsedLat;
+            userLng = parsedLng;
+
+            console.log("[NyayaMap] GPS Updated: " + userLat + ", " + userLng);
+
+            drawUserMarker();
+            if (map) {
+                map.panTo([userLat, userLng]);
+            }
+
+            if (window.NyayaNative && window.NyayaNative.onLocationUpdated) {
+                try {
+                    window.NyayaNative.onLocationUpdated(userLat, userLng);
+                } catch(e){}
+            }
+        }
+
+        function recenterGps() {
+            if (map) {
+                map.setView([userLat, userLng], 15);
+                drawUserMarker();
+            }
+        }
+
+        function toggleMapLayer() {
+            if (!map) return;
+            isSatellite = !isSatellite;
+            if (tileLayer) map.removeLayer(tileLayer);
+
+            if (isSatellite) {
+                tileLayer = L.tileLayer(satelliteUrl, { maxZoom: 18 });
+                document.getElementById('layerToggleBtn').innerText = '🛰️';
+            } else {
+                attachTileLayer(0);
+                document.getElementById('layerToggleBtn').innerText = '🗺️';
+            }
+            tileLayer.addTo(map);
+        }
+
+        function setFilterCategory(cat, element) {
+            filterCategory(cat, element);
+        }
+
+        function filterCategory(cat, element) {
+            currentFilter = cat;
+            var chips = document.querySelectorAll('.chip');
+            chips.forEach(function(c) { c.classList.remove('active'); });
+            if (element) {
+                element.classList.add('active');
+            }
+
+            if (window.NyayaNative && window.NyayaNative.onFilterChanged) {
+                try { window.NyayaNative.onFilterChanged(cat); } catch(e){}
+            }
+
+            fetchOverpassServices(userLat, userLng, currentFilter, searchRadius, true);
+        }
+
+        function onRadiusChanged(val) {
+            searchRadius = parseInt(val, 10) || 5000;
+            fetchOverpassServices(userLat, userLng, currentFilter, searchRadius, true);
+        }
+
+        // Overpass OpenStreetMap Service Scan
+        function fetchOverpassServices(lat, lng, filter, radius, force) {
+            showLoader("Scanning emergency locations...");
+
+            var queryPart = "";
+            if (filter === "All") {
+                queryPart = 'node["amenity"~"police|hospital|fire_station|courthouse|restaurant|bank|atm|fuel"](around:' + radius + ',' + lat + ',' + lng + ');';
+            } else if (categoryMetadata[filter]) {
+                queryPart = 'node' + categoryMetadata[filter].query + '(around:' + radius + ',' + lat + ',' + lng + ');';
+            } else {
+                queryPart = 'node["amenity"~"police|hospital"](around:' + radius + ',' + lat + ',' + lng + ');';
+            }
+
+            var overpassUrl = "https://overpass-api.de/api/interpreter?data=[out:json];" + encodeURIComponent(queryPart) + "out body 35;";
+
+            fetch(overpassUrl)
+                .then(function(res) { return res.json(); })
+                .then(function(data) {
+                    renderOverpassNodes(data.elements || []);
+                    hideLoader();
+                })
+                .catch(function(err) {
+                    console.warn("Overpass API error:", err);
+                    hideLoader();
+                    showToast("Live OSM scan offline. Using fallback locations.", false);
+                    renderFallbackLocations();
+                });
+        }
+
+        function renderOverpassNodes(nodes) {
+            if (!map || !markersGroup) return;
+            markersGroup.clearLayers();
+
+            var servicesList = [];
+
+            nodes.forEach(function(node) {
+                if (!node.lat || !node.lon) return;
+                var name = (node.tags && node.tags.name) ? node.tags.name : "Emergency Location";
+                var amenity = (node.tags && node.tags.amenity) ? node.tags.amenity : "Service";
+
+                var iconSymbol = "📍";
+                if (amenity === "police") iconSymbol = "🚨";
+                else if (amenity === "hospital") iconSymbol = "🏥";
+                else if (amenity === "fire_station") iconSymbol = "🚒";
+                else if (amenity === "courthouse") iconSymbol = "🏛️";
+
+                var customIcon = L.divIcon({
+                    className: 'custom-place-icon',
+                    html: '<div style="font-size:22px; filter:drop-shadow(0 2px 4px rgba(0,0,0,0.5));">' + iconSymbol + '</div>',
+                    iconSize: [28, 28]
+                });
+
+                var marker = L.marker([node.lat, node.lon], { icon: customIcon });
+                marker.on('click', function() {
+                    openDetailCard(name, amenity, node.lat, node.lon);
+                });
+
+                markersGroup.addLayer(marker);
+
+                servicesList.push({
+                    name: name,
+                    lat: node.lat,
+                    lng: node.lon,
+                    type: amenity
+                });
+            });
+
+            console.log("[NyayaMap] Services Loaded: " + servicesList.length + " markers");
+
+            if (window.NyayaNative && window.NyayaNative.onServicesUpdated) {
+                try {
+                    window.NyayaNative.onServicesUpdated(JSON.stringify(servicesList));
+                } catch(e){}
+            }
+        }
+
+        function renderFallbackLocations() {
+            if (!map || !markersGroup) return;
+            markersGroup.clearLayers();
+
+            var fallbackSample = [
+                { name: "Central Police Station", lat: userLat + 0.005, lng: userLng + 0.005, type: "police", symbol: "🚨" },
+                { name: "City Emergency Hospital", lat: userLat - 0.006, lng: userLng + 0.004, type: "hospital", symbol: "🏥" },
+                { name: "District High Court", lat: userLat + 0.008, lng: userLng - 0.007, type: "courthouse", symbol: "🏛️" }
+            ];
+
+            fallbackSample.forEach(function(item) {
+                var icon = L.divIcon({
+                    className: 'custom-place-icon',
+                    html: '<div style="font-size:22px; filter:drop-shadow(0 2px 4px rgba(0,0,0,0.5));">' + item.symbol + '</div>',
+                    iconSize: [28, 28]
+                });
+                var m = L.marker([item.lat, item.lng], { icon: icon });
+                m.on('click', function() {
+                    openDetailCard(item.name, item.type, item.lat, item.lng);
+                });
+                markersGroup.addLayer(m);
+            });
+
+            console.log("[NyayaMap] Services Loaded (Fallback locations)");
+        }
+
+        // Android Bridge - Load Complaint Markers
+        function loadComplaintMarkers(complaintsJson) {
+            if (!map || !complaintGroup) return;
+            try {
+                var complaints = typeof complaintsJson === 'string' ? JSON.parse(complaintsJson) : complaintsJson;
+                complaintGroup.clearLayers();
+
+                if (!Array.isArray(complaints)) return;
+
+                complaints.forEach(function(c) {
+                    if (c.latitude && c.longitude) {
+                        var icon = L.divIcon({
+                            html: '<div style="font-size:18px; background:#ef4444; border:2px solid #fff; border-radius:50%; width:28px; height:28px; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 10px rgba(239,68,68,0.5);">⚠️</div>',
+                            iconSize: [28, 28]
+                        });
+                        var m = L.marker([c.latitude, c.longitude], { icon: icon });
+                        m.bindPopup('<b>' + (c.title || 'Incident Record') + '</b><br>' + (c.category || 'Emergency'));
+                        complaintGroup.addLayer(m);
+                    }
+                });
+            } catch (e) {
+                console.error("Error parsing complaint markers:", e);
+            }
+        }
+
+        function openDetailCard(title, category, lat, lng) {
+            currentSelectedPlace = { title: title, lat: lat, lng: lng };
+            document.getElementById('placeTitle').innerText = title;
+            document.getElementById('placeSubtitle').innerText = category.toUpperCase() + ' • Tap below for navigation';
+            document.getElementById('detailCard').style.display = 'block';
+
+            if (map) {
+                map.panTo([lat, lng]);
+                getRouteTo(lat, lng);
+            }
+        }
+
+        function closeDetailCard() {
+            document.getElementById('detailCard').style.display = 'none';
+            clearRoute();
+        }
+
+        function navigateSelectedPlace() {
+            if (!currentSelectedPlace) return;
+            if (window.NyayaNative && window.NyayaNative.openGoogleMapsNav) {
+                try {
+                    window.NyayaNative.openGoogleMapsNav(currentSelectedPlace.lat, currentSelectedPlace.lng);
+                    return;
+                } catch(e){}
+            }
+            window.open('https://www.google.com/maps/dir/?api=1&destination=' + currentSelectedPlace.lat + ',' + currentSelectedPlace.lng);
+        }
+
+        // Android Bridge - Routing Methods
+        function getRouteTo(destLat, destLng) {
+            drawRoutePolyline(userLat, userLng, destLat, destLng);
+        }
+
+        function drawRoutePolyline(startLat, startLng, destLat, destLng) {
+            clearRoute();
+            var osrmUrl = 'https://router.project-osrm.org/route/v1/driving/' + startLng + ',' + startLat + ';' + destLng + ',' + destLat + '?overview=full&geometries=geojson';
+
+            fetch(osrmUrl)
+                .then(function(r) { return r.json(); })
+                .then(function(res) {
+                    if (res.routes && res.routes.length > 0 && map) {
+                        var route = res.routes[0];
+                        var coordinates = route.geometry.coordinates.map(function(c) { return [c[1], c[0]]; });
+                        routePolyline = L.polyline(coordinates, { color: '#10b981', weight: 5, opacity: 0.85 }).addTo(map);
+
+                        if (window.NyayaNative && window.NyayaNative.onRouteCalculated) {
+                            try {
+                                window.NyayaNative.onRouteCalculated("Destination", route.distance / 1000.0, Math.round(route.duration / 60.0));
+                            } catch(e){}
+                        }
+                    }
+                })
+                .catch(function(e) {
+                    console.warn("OSRM routing unavailable:", e);
+                });
+        }
+
+        function clearRoute() {
+            if (routePolyline && map) {
+                map.removeLayer(routePolyline);
+                routePolyline = null;
+            }
+        }
+
+        // Android Bridge - Nominatim Search
+        function performSearch(queryInput) {
+            var query = queryInput || document.getElementById('searchInput').value.trim();
+            if (!query) return;
+
+            showLoader("Searching location...");
+            var nomUrl = 'https://nominatim.openstreetmap.org/search?format=json&q=' + encodeURIComponent(query);
+
+            fetch(nomUrl)
+                .then(function(r) { return r.json(); })
+                .then(function(results) {
+                    hideLoader();
+                    if (results && results.length > 0 && map) {
+                        var first = results[0];
+                        var lat = parseFloat(first.lat);
+                        var lon = parseFloat(first.lon);
+                        map.setView([lat, lon], 15);
+                        openDetailCard(first.display_name.split(',')[0], "Search Result", lat, lon);
+
+                        if (window.NyayaNative && window.NyayaNative.onSearchSuccess) {
+                            try {
+                                window.NyayaNative.onSearchSuccess(query, lat, lon);
+                            } catch(e){}
+                        }
+                    } else {
+                        showToast("Location not found", true);
+                    }
+                })
+                .catch(function(err) {
+                    hideLoader();
+                    showToast("Search failed. Check connection.", true);
+                });
+        }
+
+        function refreshCurrentLocationServices() {
+            fetchOverpassServices(userLat, userLng, currentFilter, searchRadius, true);
+        }
+
+        function showLoader(txt) {
+            var loaderText = document.getElementById('loaderText');
+            if (loaderText) loaderText.innerText = txt || "Loading...";
+            var loader = document.getElementById('mapLoader');
+            if (loader) {
+                loader.style.display = 'flex';
+                loader.style.opacity = '1';
+            }
+        }
+
+        function hideLoader() {
+            var loader = document.getElementById('mapLoader');
+            if (loader) {
+                loader.style.opacity = '0';
+                setTimeout(function() { loader.style.display = 'none'; }, 350);
+            }
+        }
+
+        function showToast(msg, isError) {
+            var t = document.getElementById('toast');
+            if (t) {
+                t.innerText = msg;
+                t.style.background = isError ? 'rgba(239, 68, 68, 0.95)' : 'rgba(16, 185, 129, 0.95)';
+                t.style.display = 'block';
+                setTimeout(function() { t.style.display = 'none'; }, 3000);
+            }
+        }
+    </script>
+</body>
+</html>
